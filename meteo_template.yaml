@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  SourceCodeBucket:
+    Type: String
+    Description: The name of the S3 bucket containing the CloudFormation template and Lambda Python files
+
+Resources:
+  GetDataLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: LambdaS3PutPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource: !Sub 'arn:aws:s3:::${rawDataBucket}/*'
+
+  GetDataLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    DependsOn: GetDataLambdaRole
+    Properties:
+      Handler: lambda_get_data.lambda_handler
+      Role: !GetAtt GetDataLambdaRole.Arn
+      Runtime: python3.10
+      Description: "Function parsing API raw data and drop them in s3 bucket"
+      Timeout: 10
+      Code:
+        S3Bucket: !Ref SourceCodeBucket
+        S3Key: 'lambda_functions_code.zip'
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: !Ref 'rawDataBucket'
+
+  TransformDataLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: TransformDataLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'glue:StartCrawler'
+                  - 'glue:CreateDatabase'
+                  - 'glue:GetDatabase'
+                Resource: '*'
+
+  TransformDataLambdaFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - TransformDataLambdaRole
+      - transformedDataBucket
+    Properties:
+      Handler: lambda_transform_data.lambda_handler
+      Runtime: python3.10
+      Description: "Function processing files when they're dropped in s3 bucket"
+      Timeout: 10
+      Role: !GetAtt TransformDataLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref SourceCodeBucket
+        S3Key: 'lambda_functions_code.zip'
+      Environment:
+        Variables:
+          TARGET_S3_BUCKET_NAME: !Ref 'transformedDataBucket'
+          CRAWLER_NAME: !Ref 'GlueCrawler'
+
+
+  TransformLambdaS3Permission:
+    Type: 'AWS::Lambda::Permission'
+    DependsOn: TransformDataLambdaFunction
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt TransformDataLambdaFunction.Arn
+      Principal: 's3.amazonaws.com'
+
+  rawDataBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: TransformLambdaS3Permission
+    Properties:
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:Put'
+            Function: !GetAtt TransformDataLambdaFunction.Arn
+
+  transformedDataBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties: {}
+
+  DailyScheduleRule:
+    Type: 'AWS::Events::Rule'
+    DependsOn:
+      - GetDataLambdaFunction
+    Properties:
+      Description: 'Daily Schedule Rule for GetDataLambdaFunction'
+      ScheduleExpression: 'cron(0 16 * * ? *)'  # Daily at 16:00
+      State: 'ENABLED'
+      Targets:
+        - Arn: !GetAtt GetDataLambdaFunction.Arn
+          Id: 'TargetFunction'
+
+  InvokeLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt GetDataLambdaFunction.Arn
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt DailyScheduleRule.Arn
+
+  GlueDatabase:
+    Type: 'AWS::Glue::Database'
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput: {}
+
+  GlueCrawlerRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ 'glue.amazonaws.com' ]
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: GlueCrawlerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:PutObject'
+                Resource: [ 'arn:aws:s3:::your_raw_data_bucket/*', 'arn:aws:s3:::your_raw_data_bucket' ]
+              - Effect: Allow
+                Action:
+                  - 'glue:StartCrawler'
+                  - 'glue:CreateDatabase'
+                  - 'glue:GetDatabase'
+                Resource: '*'
+#        - PolicyName: AWSGlueServiceRolePolicy
+#          PolicyDocument:
+#            Version: '2012-10-17'
+#            Statement:
+#              - Effect: Allow
+#                Action: '*'
+#                Resource: '*'
+
+  GlueCrawler:
+    Type: 'AWS::Glue::Crawler'
+    DependsOn:
+      - GlueDatabase
+      - transformedDataBucket
+      - GlueCrawlerRole
+    Properties:
+      Role: !GetAtt GlueCrawlerRole.Arn
+      DatabaseName: !Ref GlueDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub 's3://${transformedDataBucket}'
+      RecrawlPolicy:
+        RecrawlBehavior: CRAWL_NEW_FOLDERS_ONLY
