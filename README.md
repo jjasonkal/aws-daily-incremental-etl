@@ -1,14 +1,22 @@
 # AWS DAILY INCREMENTAL ETL
 
-<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Lambda</span>
-<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Glue</span>
-<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">S3</span>
-<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Athena</span>
-<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Cloudformation</span>
-<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Python</span>
-<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">EventBridge</span>
-<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">S3 Partitions</span>
-<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">S3 Events</span>
+[//]: # (<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Lambda</span>)
+
+[//]: # (<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Glue</span>)
+
+[//]: # (<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">S3</span>)
+
+[//]: # (<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Athena</span>)
+
+[//]: # (<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Cloudformation</span>)
+
+[//]: # (<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">Python</span>)
+
+[//]: # (<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">EventBridge</span>)
+
+[//]: # (<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">S3 Partitions</span>)
+
+[//]: # (<span style="background-color: #0563bb; color: white; padding: 4px 8px; border-radius: 8px; margin: 2px; 2px; display: inline-block;">S3 Events</span>)
 
 This project automates the daily incremental extraction, transformation, and loading (ETL) of meteo data from the Open-Meteo API using AWS services. Leveraging AWS Lambda, Amazon S3, AWS Glue, Amazon Athena, and AWS CloudFormation it establishes an easily scalable data pipeline. The first Lambda function uploads raw JSON data that is retrieved from the API to a raw data S3 Bucket and is triggered daily via EventBridge. The second Lambda function transforms the new data into clean CSV format, uploads them in the transformed data S3 Bucket, and is triggered by S3 put events of the raw data S3 Bucket. Additionally, after the successful data transformation, this Lambda function programmatically invokes the Glue crawler which performs incremental loads into the Glue Data Catalog, crawling only the new partition folders. Amazon Athena is utilized to analyze the data, querying the overall table in the Glue Data Catalog. The specified architecture is configured in a CloudFormation template providing a reliable, reproducible, and version-able deployment mechanism that can be applied to different regions or accounts. This solution offers a cost-effective and highly scalable approach for daily incremental ETL, facilitating extensive analysis and insights derivation.
 
