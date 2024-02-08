@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
   SourceCodeBucket:
     Type: String
-    Description: The name of the S3 bucket containing the CloudFormation template and Lambda Python files
+    Description: The name of the S3 bucket containing the CloudFormation template and Lambda Functions zip
 
 Resources:
   GetDataLambdaRole:
@@ -161,21 +161,29 @@ Resources:
                 Action:
                   - 's3:GetObject'
                   - 's3:ListBucket'
-                  - 's3:PutObject'
-                Resource: [ 'arn:aws:s3:::your_raw_data_bucket/*', 'arn:aws:s3:::your_raw_data_bucket' ]
+                Resource:
+                  - !Sub 'arn:aws:s3:::${transformedDataBucket}'
+                  - !Sub 'arn:aws:s3:::${transformedDataBucket}/*'
               - Effect: Allow
                 Action:
                   - 'glue:StartCrawler'
                   - 'glue:CreateDatabase'
                   - 'glue:GetDatabase'
+                  - 'glue:CreateTable'
+                  - 'glue:GetTable'
+                  - 'glue:CreateTableVersion'
+                  - 'glue:GetTableVersion'
+                  - 'glue:UpdateTable'
+                  - 'glue:BatchCreatePartition'
+                  - 'glue:BatchGetPartition'
+                  - 'glue:GetPartition'
                 Resource: '*'
-#        - PolicyName: AWSGlueServiceRolePolicy
-#          PolicyDocument:
-#            Version: '2012-10-17'
-#            Statement:
-#              - Effect: Allow
-#                Action: '*'
-#                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
 
   GlueCrawler:
     Type: 'AWS::Glue::Crawler'
